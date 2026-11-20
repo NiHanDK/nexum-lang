@@ -42,7 +42,7 @@ Read the full specification in [`dist/SPEC.md`](dist/SPEC.md). Agents learn the 
 
 ## Using it
 
-Open `dist/translator.html` in a browser to translate messages, or use the CLI (Node 20+, no install needed):
+Translate messages at **https://nihandk.github.io/nexum-lang/** (runs in your browser; nothing is sent anywhere), open `dist/translator.html` locally, or use the CLI (Node 20+, no install needed):
 
 ```sh
 node dist/nx.mjs translate examples/02-code-review.nx --roster examples/roster.yaml

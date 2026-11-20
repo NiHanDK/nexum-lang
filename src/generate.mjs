@@ -216,10 +216,11 @@ export function translatorHtml(registry, runtimeSrc) {
   .p { font-size:13px; margin-top:6px; } .p.error { color:var(--err); } .p.warning { color:var(--warn); }
   .ok { color:var(--accent); font-size:13px; margin-top:6px; }
   .empty { color:var(--muted); }
+  footer { padding:0 24px 24px; font-size:13px; color:var(--muted); } footer a { color:var(--accent); }
 </style>
 </head>
 <body>
-<header><h1>NEXUM</h1><span>translator · language ${registry.version} · packs: ${Object.keys(registry.packs).join(', ')}</span></header>
+<header><h1>NEXUM</h1><span>translator · language ${registry.version} · packs: ${Object.keys(registry.packs).join(', ')} · runs in your browser, nothing is sent anywhere</span></header>
 <main>
   <section>
     <label for="msg">NEXUM messages</label>
@@ -232,6 +233,7 @@ export function translatorHtml(registry, runtimeSrc) {
     <div id="out"></div>
   </section>
 </main>
+<footer><a href="https://github.com/${registry.repository}/blob/main/dist/SPEC.md">Specification</a> · <a href="https://github.com/${registry.repository}/tree/main/dist/cards">Agent cards</a> · <a href="https://github.com/${registry.repository}">${registry.repository}</a></footer>
 <script>
 ${inlineModule(runtimeSrc)}
 const REGISTRY = ${JSON.stringify(registry)};
@@ -256,8 +258,10 @@ function run() {
       + probs + '</div>';
   }).join('');
 }
+const rosterBox = document.getElementById('roster');
+try { const saved = localStorage.getItem('nexum.roster'); if (saved) rosterBox.value = saved; } catch (e) {}
 document.getElementById('msg').addEventListener('input', run);
-document.getElementById('roster').addEventListener('input', run);
+rosterBox.addEventListener('input', () => { try { localStorage.setItem('nexum.roster', rosterBox.value); } catch (e) {} run(); });
 run();
 </script>
 </body>
