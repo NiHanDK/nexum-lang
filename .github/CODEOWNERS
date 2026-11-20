@@ -1,0 +1,9 @@
+# NEXUM governance: Nicolai must approve every change.
+# With branch protection "Require review from Code Owners" turned on, no agent can merge on his behalf.
+# The lines below name the files that matter most; the first line covers everything else.
+*                         @NiHanDK
+/registry/language.yaml   @NiHanDK
+/registry/core.yaml       @NiHanDK
+/budgets.yaml             @NiHanDK
+/tools/                   @NiHanDK
+/.github/                 @NiHanDK

@@ -1,0 +1,7 @@
+@nx1.0 core or>qa upd ^11
+a q1 "EV Test"
+need perm "write access to the EV Test company"
+txt "customer prefers deploys on Friday"
+---
+Kære konsulent,
+testen køres i firmaet EV Test. Denne tekst sendes videre ordret.

@@ -1,0 +1,8 @@
+@nx1.0 core,dev,bc qa>or done ^9
+def $base "https://api.businesscentral.dynamics.com/v2.0/sandbox/api/ev/debt/v1.0"
+ctx task:EVIT-1810 app:"EV Debt Collection"
+api "EV Rykker API" ev/debt/v1.0 rykkers st:new ops:"GET|PATCH"
+http GET "$base/rykkers" 200 ms:140
+http PATCH "$base/rykkers(123)" 400 "missing If-Match" ms:212
+err "The request requires an If-Match header." src:api
+v part "PATCH needs If-Match handling"

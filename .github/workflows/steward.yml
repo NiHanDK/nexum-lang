@@ -1,0 +1,64 @@
+name: Steward
+
+# Weekly: groups duplicate proposals, collects evidence, reads the txt usage log,
+# and opens a PR for ideas seen in at least 3 separate tasks. It never merges.
+on:
+  schedule:
+    - cron: '17 4 * * 1' # Mondays 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: steward
+  cancel-in-progress: false
+
+jobs:
+  steward:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the Anthropic API key is configured
+        id: key
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not set; the steward is skipped."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.key.outputs.ok == 'true'
+        with:
+          fetch-depth: 0
+          # A personal or GitHub App token lets CI run on the steward's PRs.
+          # With the default token, GitHub does not start workflows for PRs it creates.
+          token: ${{ secrets.NEXUM_BOT_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v5
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        if: steps.key.outputs.ok == 'true'
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NEXUM_BOT_TOKEN || github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.NEXUM_BOT_TOKEN || github.token }}
+          prompt: |
+            You are the NEXUM steward for the repository ${{ github.repository }}.
+            Read .github/prompts/steward.md and follow it exactly.
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(gh issue:*),Bash(gh label:*),Bash(gh pr create:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(npm run:*),Bash(npm test:*),Bash(node:*)"

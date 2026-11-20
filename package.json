@@ -1,0 +1,21 @@
+{
+  "name": "nexum-lang",
+  "version": "1.0.0",
+  "description": "NEXUM: a token-efficient, versioned language for messages between AI agents.",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "bin": { "nx": "dist/nx.mjs" },
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check:budget": "node tools/check-budget.mjs",
+    "check:compat": "node tools/check-compat.mjs",
+    "check": "npm run build && npm test && npm run check:budget && npm run check:compat",
+    "nx": "node dist/nx.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
+}

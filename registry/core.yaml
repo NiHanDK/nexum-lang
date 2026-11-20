@@ -1,0 +1,181 @@
+# NEXUM core pack. Owned by Nicolai (see CODEOWNERS).
+# Budget: <= 20 records (see budgets.yaml). 15 used, 5 kept free on purpose.
+#
+# Record schema:
+#   meaning   one line, used in agent cards and the spec
+#   en        translation template: {arg} inserts a value, [ ... ] is dropped when a value inside is missing
+#   args      positional arguments in fixed order; optional ones must come last
+#             type: a type from language.yaml, or set: <set name>, or values: {code: label}
+#             optional: true   none_ok: true (accepts -)   pattern: extra regex   hint: text shown in cards
+#   keys      optional key:value pairs (same type options as args, plus en: label)
+#   required_when  makes an optional arg required for some values of another arg
+#   repeat_keys    the same key may appear more than once
+#   min_keys       minimum number of key:value pairs
+
+pack: core
+description: Records almost any agent setup needs.
+
+records:
+  def:
+    meaning: define a reference
+    en: "Define {name} = {value}"
+    args:
+      - {name: name, type: defname}
+      - {name: value, type: value}
+    example: 'def $src "app/Debt Collection"'
+
+  ctx:
+    meaning: context the task depends on
+    en: "Context"
+    args: []
+    repeat_keys: true
+    min_keys: 1
+    keys:
+      task: {type: value, en: task}
+      file: {type: value, en: file}
+      dir: {type: value, en: folder}
+      url: {type: value, en: URL}
+      branch: {type: value, en: branch}
+      commit: {type: value, en: commit}
+      ver: {type: value, en: version}
+      env: {type: value, en: environment}
+    example: 'ctx task:EVIT-1740 file:"$src/X.al" branch:fix-1'
+
+  ac:
+    meaning: acceptance criterion status
+    en: "Acceptance criterion {id}: {status}[ — {note}]"
+    args:
+      - {name: id, type: id}
+      - {name: status, set: result}
+      - {name: note, type: text, optional: true}
+    required_when:
+      - {arg: note, when: {status: [part, fail, blk]}}
+    example: 'ac 4 part "missing Customer No. filter"'
+
+  f:
+    meaning: finding
+    en: "Finding ({sev})[ at {loc}]: {what}"
+    args:
+      - {name: sev, set: severity}
+      - {name: loc, type: loc, none_ok: true}
+      - {name: what, type: text}
+    keys:
+      fix: {type: text, en: suggested fix}
+      ac: {type: id, en: acceptance criterion}
+      id: {type: id, en: finding ID}
+    example: 'f b "$src/X.al#212" "applies by Document No. only" fix:"add SetRange" ac:4'
+
+  chk:
+    meaning: checklist item
+    en: "Check {status}: {item}"
+    args:
+      - {name: status, set: result}
+      - {name: item, type: text}
+    keys:
+      note: {type: text, en: note}
+    example: 'chk ok "migration script runs"'
+
+  step:
+    meaning: plan step
+    en: "Step {n} ({status}): {what}"
+    args:
+      - {name: n, type: int}
+      - {name: status, set: progress}
+      - {name: what, type: text}
+    keys:
+      by: {type: agent, en: done by}
+    example: 'step 2 doing "update codeunit" by:dev'
+
+  out:
+    meaning: something produced
+    en: "Output {target}[ — {desc}]"
+    args:
+      - {name: target, type: value}
+      - {name: desc, type: text, optional: true}
+    keys:
+      kind:
+        en: kind
+        values: {file: file, doc: document, pr: pull request, commit: commit, url: link}
+    example: 'out "docs/EVIT-1740.md" "design" kind:doc'
+
+  err:
+    meaning: error, exact text
+    en: "Error: {text}"
+    args:
+      - {name: text, type: text}
+    keys:
+      src: {type: value, en: source}
+      at: {type: loc, en: location}
+    example: 'err "Field X does not exist" src:build'
+
+  hyp:
+    meaning: hypothesis with confidence
+    en: "Hypothesis {id} ({conf}% confidence): {statement}"
+    args:
+      - {name: id, type: id}
+      - {name: conf, type: pct}
+      - {name: statement, type: text}
+    keys:
+      st:
+        en: status
+        values: {open: open, conf: confirmed, rej: rejected}
+      ev: {type: text, en: evidence}
+    example: 'hyp h1 70 "duplicate posts come from job queue" st:open'
+
+  q:
+    meaning: question that needs an answer
+    en: "Question {id}: {question}"
+    args:
+      - {name: id, type: id}
+      - {name: question, type: text}
+    keys:
+      opt: {type: text, en: options}
+      to: {type: agent, en: asked to}
+    example: 'q q1 "which company to test in?" opt:"CRONUS|EV Test"'
+
+  a:
+    meaning: answer to a question
+    en: "Answer to {id}: {answer}"
+    args:
+      - {name: id, type: id}
+      - {name: answer, type: text}
+    example: 'a q1 CRONUS'
+
+  need:
+    meaning: something missing
+    en: "Needs {kind}: {what}"
+    args:
+      - name: kind
+        values: {input: input, perm: permission, skill: skill, tool: tool}
+      - {name: what, type: text}
+    example: 'need skill "AL report layouts"'
+
+  v:
+    meaning: overall verdict
+    en: "Verdict: {status}[ — {reason}]"
+    args:
+      - {name: status, set: verdict}
+      - {name: reason, type: text, optional: true}
+    required_when:
+      - {arg: reason, when: {status: [part, fail, blk]}}
+    example: 'v part "AC 4 not met"'
+
+  ext:
+    meaning: language extension proposal
+    en: "Language proposal ({kind}) {name}: {why}"
+    args:
+      - name: kind
+        values: {rec: new record, key: new key, val: new value, pack: new pack, dep: deprecation}
+      - {name: name, type: value}
+      - {name: why, type: text}
+    keys:
+      ex: {type: text, en: example}
+      pack: {type: value, en: target pack}
+    example: 'ext rec tst "need test counts" ex:"tst 41/42" pack:dev'
+
+  txt:
+    meaning: short free text, last resort (max 25 words)
+    en: "Note: {text}"
+    args:
+      - {name: text, type: text}
+    example: 'txt "customer prefers Friday deploy"'

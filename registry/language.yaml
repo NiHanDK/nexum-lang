@@ -1,0 +1,93 @@
+# NEXUM language definition: syntax-level facts shared by every pack.
+# This file and registry/core.yaml are owned by Nicolai (see CODEOWNERS).
+# Everything in dist/ is generated from the registry. Never edit dist/ by hand.
+
+name: NEXUM
+tag: nx
+# Language version. Every pack is released together under this version.
+# MAJOR = breaking (Nicolai only), MINOR = additive, PATCH = wording/docs only.
+version: 1.0.0
+
+repository: NiHanDK/nexum-lang
+
+reserved_agents:
+  usr: user
+  sys: automated process
+
+message_types:
+  do:
+    en: task assignment
+    requires:
+      - at_least_one_of: [{record: ctx}, {record: step}]
+  done:
+    en: task finished
+    requires:
+      - exactly_one_of: [{record: v}]
+  fail:
+    en: task failed
+    requires:
+      - at_least_one_of: [{record: err}, {record: v, where: {status: [fail, blk]}}]
+  upd:
+    en: progress update
+    requires: []
+  ask:
+    en: question
+    requires:
+      - at_least_one_of: [{record: q}]
+
+# Shared value sets. Labels are used by the translator.
+sets:
+  result:
+    ok: OK
+    part: partly met
+    fail: failed
+    blk: blocked
+    open: not assessed yet
+    skip: not applicable
+  verdict:
+    ok: OK
+    part: partly met
+    fail: failed
+    blk: blocked
+  progress:
+    todo: to do
+    doing: in progress
+    done: done
+    blk: blocked
+    skip: skipped
+  severity:
+    b: blocker
+    s: should fix
+    n: note
+  change:
+    new: new
+    mod: modified
+    del: deleted
+
+# Value types usable by record arguments and keys.
+types:
+  id: {pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', en: short ID}
+  int: {pattern: '^[0-9]+$', en: whole number}
+  pct: {pattern: '^(100|[1-9]?[0-9])$', en: whole number 0-100}
+  agent: {pattern: '^[a-z][a-z0-9]*$', en: agent code}
+  defname: {pattern: '^\$[a-z0-9]+$', en: reference name}
+  ratio: {pattern: '^[0-9]+/[0-9]+$', en: passed/total}
+  text: {en: text}
+  value: {en: value}
+  loc: {en: location (path, path#line, path#from-to or -)}
+
+limits:
+  txt_max_words: 25
+
+# Handwritten part of the core agent card. Keep it terse: it counts against the core budget.
+card_intro: |
+  First line: @nx<ver> <packs> <from>><to> <type> #<id> (a reply uses ^<id> of the message it answers). Then one record per line.
+  Types: do=task (needs ctx or step) | done=finished (exactly one v) | fail=failed (err, or v fail/blk) | upd=progress | ask=question (needs q).
+  Record: code, required args in order, then optional key:value in any order. [x] = optional.
+  Quote a value only if it has a space, quote or colon; \" inside quotes. - = none. path#12 or path#12-30. Lists: a|b. Confidence 0-100.
+  Never shorten names, IDs, paths, error texts, code, versions.
+  def $x is valid only in its own message; copy the def lines when forwarding records.
+  A line --- ends NEXUM; everything after it is text for humans, passed on verbatim.
+  Unknown version or pack: try to sync it; else use what you understand, ignore unknown records, tell the user.
+  Agent codes come from roster.yaml; reserved: usr (user), sys (automation). Declare as few packs as possible.
+  No fitting record? Use txt, and propose one with ext.

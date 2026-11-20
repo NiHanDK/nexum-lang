@@ -1,0 +1,6 @@
+@nx1.0 core,bc sec>or fail ^5
+ctx task:EVIT-1740 app:"EV Debt Collection"
+obj table 50110 "Rykker Log" st:new
+perm "EV DEBT" tabledata "Rykker Log" -
+f b "src/RykkerLog.Table.al#1" "new table not in any permission set" fix:"add RIMD to EV DEBT" rule:PTE0004
+v fail "permissions missing"

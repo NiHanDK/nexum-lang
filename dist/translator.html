@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXUM 1.0.0 translator</title>
+<style>
+  :root { --bg:#f7f6f3; --panel:#fff; --ink:#1d1d1b; --muted:#6b6a66; --line:#e2e0da; --accent:#2f5d50; --warn:#9a6700; --err:#b42318; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#161615; --panel:#1f1f1d; --ink:#ecebe7; --muted:#a3a19b; --line:#34332f; --accent:#7fb8a6; --warn:#e3b341; --err:#f97066; } }
+  :root[data-theme=dark] { --bg:#161615; --panel:#1f1f1d; --ink:#ecebe7; --muted:#a3a19b; --line:#34332f; --accent:#7fb8a6; --warn:#e3b341; --err:#f97066; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding:20px 24px 8px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; letter-spacing:.04em; }
+  header span { color:var(--muted); font-size:13px; }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:8px 24px 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  label { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  textarea { width:100%; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); padding:10px; font:13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize:vertical; }
+  #msg { min-height:300px; } #roster { min-height:90px; }
+  .msg { border-top:1px solid var(--line); padding:10px 0; } .msg:first-child { border-top:0; padding-top:0; }
+  .head { font-weight:600; } ul { margin:6px 0 0; padding-left:18px; } li { margin:2px 0; overflow-wrap:anywhere; }
+  .unknown { color:var(--muted); font-style:italic; }
+  pre.human { white-space:pre-wrap; background:var(--bg); border-radius:6px; padding:8px; font-size:13px; margin:6px 0 0; }
+  .p { font-size:13px; margin-top:6px; } .p.error { color:var(--err); } .p.warning { color:var(--warn); }
+  .ok { color:var(--accent); font-size:13px; margin-top:6px; }
+  .empty { color:var(--muted); }
+</style>
+</head>
+<body>
+<header><h1>NEXUM</h1><span>translator · language 1.0.0 · packs: core, bc, bcops, dev</span></header>
+<main>
+  <section>
+    <label for="msg">NEXUM messages</label>
+    <textarea id="msg" spellcheck="false">@nx1.0 core,dev,bc cr>or done ^7
+def $dc "ev-evita/app/Debt Collection"
+ctx task:EVIT-1740 app:"EV Debt Collection"
+ac 4 part "Horten fallback lacks Customer No. filter"
+f b "$dc/HortenAdvisMgt_IFPS.Codeunit.al#212" "applies by Document No. only" fix:"add SetRange(\"Customer No.\", ...)" ac:4
+tst 41/42 fail:1 suite:DebtColl
+v part "AC 4 not met"</textarea>
+    <label for="roster">roster.yaml (optional, maps agent codes to names)</label>
+    <textarea id="roster" spellcheck="false">agents:
+  or: orchestrator
+  cr: code-reviewer
+  dev: developer</textarea>
+  </section>
+  <section>
+    <label>English</label>
+    <div id="out"></div>
+  </section>
+</main>
+<script>
+// NEXUM runtime: parser, linter and translator.
+// Zero dependencies. Works in Node and in the browser (it is inlined into dist/translator.html and dist/nx.mjs).
+// It operates on the compiled registry (dist/registry.json), never on the YAML directly.
+
+const KEY_RE = /^([a-z][a-z0-9]*):(.*)$/s;
+const HEADER_RE = /^@nx(\d+)\.(\d+)\s+(\S+)\s+([a-z][a-z0-9]*)>([a-z][a-z0-9]*)\s+([a-z]+)\s+([#^])(\S+)\s*$/;
+const REF_RE = /\$[a-z0-9]+/g;
+
+// ---------------------------------------------------------------- tokenizing
+
+/** Split one record line into tokens. Returns {tokens, error}. */
+function tokenizeLine(line) {
+  const tokens = [];
+  let i = 0;
+  const n = line.length;
+  while (i < n) {
+    while (i < n && line[i] === ' ') i++;
+    if (i >= n) break;
+    let bare = '';
+    while (i < n && line[i] !== ' ' && line[i] !== '"') bare += line[i++];
+    if (i < n && line[i] === '"') {
+      const keyMatch = bare === '' ? null : KEY_RE.exec(bare);
+      if (bare !== '' && !(keyMatch && keyMatch[2] === '')) {
+        return { tokens, error: `unexpected quote after "${bare}" (quote the whole value)` };
+      }
+      i++; // opening quote
+      let value = '';
+      let closed = false;
+      while (i < n) {
+        const c = line[i];
+        if (c === '\\' && i + 1 < n && (line[i + 1] === '"' || line[i + 1] === '\\')) {
+          value += line[i + 1];
+          i += 2;
+          continue;
+        }
+        if (c === '"') { closed = true; i++; break; }
+        value += c;
+        i++;
+      }
+      if (!closed) return { tokens, error: 'missing closing quote' };
+      if (i < n && line[i] !== ' ') return { tokens, error: 'text directly after a closing quote' };
+      tokens.push({ key: keyMatch ? keyMatch[1] : null, value, quoted: true });
+    } else {
+      const m = tokens.length > 0 ? KEY_RE.exec(bare) : null;
+      if (m) {
+        if (m[2] === '') return { tokens, error: `key "${m[1]}:" has no value` };
+        tokens.push({ key: m[1], value: m[2], quoted: false });
+      } else {
+        tokens.push({ key: null, value: bare, quoted: false });
+      }
+    }
+  }
+  return { tokens, error: null };
+}
+
+// ---------------------------------------------------------------- parsing
+
+/** Split text that may contain several messages into message texts (each starts with @nx). */
+function splitMessages(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let cur = null;
+  let inHuman = false;
+  for (const line of lines) {
+    if (line.startsWith('@nx') && !inHuman) {
+      if (cur) out.push(cur.join('\n'));
+      cur = [line];
+      continue;
+    }
+    if (line.startsWith('@nx') && inHuman && HEADER_RE.test(line.trim())) {
+      // a new header after human text starts a new message
+      out.push(cur.join('\n'));
+      cur = [line];
+      inHuman = false;
+      continue;
+    }
+    if (!cur) continue;
+    if (line.trim() === '---') inHuman = true;
+    cur.push(line);
+  }
+  if (cur) out.push(cur.join('\n'));
+  return out;
+}
+
+/** Parse one message. Returns {header, records, human, problems}. Never throws. */
+function parseMessage(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const problems = [];
+  let idx = 0;
+  while (idx < lines.length && lines[idx].trim() === '') idx++;
+  const headerLine = (lines[idx] || '').trim();
+  const hm = HEADER_RE.exec(headerLine);
+  let header = null;
+  if (!hm) {
+    problems.push({ level: 'error', line: idx + 1, msg: 'first line must be: @nx<major>.<minor> <packs> <from>><to> <type> #<id> (or ^<id> for a reply)' });
+  } else {
+    header = {
+      major: Number(hm[1]),
+      minor: Number(hm[2]),
+      packs: hm[3].split(',').filter(Boolean),
+      from: hm[4],
+      to: hm[5],
+      type: hm[6],
+      reply: hm[7] === '^',
+      id: hm[8],
+    };
+  }
+  const records = [];
+  let human = null;
+  for (let i = idx + 1; i < lines.length; i++) {
+    const raw = lines[i];
+    if (raw.trim() === '---') {
+      human = lines.slice(i + 1).join('\n');
+      break;
+    }
+    if (raw.trim() === '') continue;
+    const { tokens, error } = tokenizeLine(raw.trim());
+    if (error) {
+      problems.push({ level: 'error', line: i + 1, msg: error });
+      continue;
+    }
+    const [first, ...rest] = tokens;
+    records.push({ line: i + 1, raw: raw.trim(), code: first.value, args: rest.filter(t => !t.key), keys: rest.filter(t => t.key), tokens: rest });
+  }
+  return { header, records, human, problems };
+}
+
+// ---------------------------------------------------------------- registry helpers
+
+/** Records available for a message that declares `packs`. Core is always included. */
+function resolvePacks(registry, packs) {
+  const declared = ['core', ...packs.filter(p => p !== 'core')];
+  const unknownPacks = declared.filter(p => !registry.packs[p]);
+  const known = declared.filter(p => registry.packs[p]);
+  const records = {};
+  for (const p of known) {
+    for (const [code, rec] of Object.entries(registry.packs[p].records || {})) {
+      records[code] = { ...rec, keys: { ...(rec.keys || {}) }, pack: p };
+    }
+  }
+  for (const p of known) {
+    for (const [code, ext] of Object.entries(registry.packs[p].extends || {})) {
+      if (!records[code]) continue;
+      for (const [k, def] of Object.entries(ext.keys || {})) records[code].keys[k] = { ...def, pack: p };
+    }
+  }
+  return { records, known, unknownPacks };
+}
+
+/** Which pack defines record `code` (any pack in the registry), or null. */
+function packOfRecord(registry, code) {
+  for (const [p, def] of Object.entries(registry.packs)) if (def.records && def.records[code]) return p;
+  return null;
+}
+
+function enumValues(registry, spec) {
+  if (spec.values) return spec.values;
+  if (spec.set) return registry.sets[spec.set] || {};
+  return null;
+}
+
+/** Check one value against an arg or key spec. Returns an error string or null. */
+function checkValue(registry, spec, value) {
+  const values = enumValues(registry, spec);
+  if (values) {
+    if (!Object.prototype.hasOwnProperty.call(values, value)) return `"${value}" is not one of ${Object.keys(values).join('|')}`;
+    return null;
+  }
+  if (spec.type === 'amount') {
+    const units = Object.keys(spec.units || {});
+    const m = /^([0-9]+(?:\.[0-9]+)?)([a-z]+)$/.exec(value);
+    if (!m || !units.includes(m[2])) return `"${value}" must be a number followed by one of ${units.join('|')}`;
+    return null;
+  }
+  const type = registry.types[spec.type];
+  if (type && type.pattern && !new RegExp(type.pattern).test(value)) return `"${value}" is not a valid ${type.en}`;
+  if (spec.pattern && !new RegExp(spec.pattern).test(value)) return `"${value}" does not match the expected format`;
+  if (value === '') return 'empty value';
+  return null;
+}
+
+// ---------------------------------------------------------------- roster
+
+/** Parse a roster.yaml (agents: {code: name}). Tiny parser for a flat map; also accepts code: name at top level. */
+function parseRoster(text) {
+  const agents = {};
+  if (!text) return agents;
+  for (const rawLine of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const line = rawLine.replace(/\s+#.*$/, '');
+    const m = /^\s*([a-z][a-z0-9]*)\s*:\s*(.+?)\s*$/.exec(line);
+    if (!m || m[1] === 'agents') continue;
+    agents[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+  return agents;
+}
+
+// ---------------------------------------------------------------- linting
+
+/**
+ * Lint one message. Returns a list of problems {level: 'error'|'warning', line, msg}.
+ * Warnings are the fallback cases (unknown pack, newer minor version, unknown record): the message is still usable.
+ */
+function lintMessage(registry, text, roster = null) {
+  const parsed = parseMessage(text);
+  const problems = [...parsed.problems];
+  const { header } = parsed;
+  if (!header) return problems;
+  const [regMajor, regMinor] = registry.version.split('.').map(Number);
+  const add = (level, line, msg) => problems.push({ level, line, msg });
+
+  if (header.major !== regMajor) add('error', 1, `message is nx${header.major}.${header.minor} but this registry is ${registry.version}; sync that major version`);
+  else if (header.minor > regMinor) add('warning', 1, `message is nx${header.major}.${header.minor}, newer than ${registry.version}; sync it, until then unknown records are ignored`);
+
+  const { records: table, unknownPacks } = resolvePacks(registry, header.packs);
+  for (const p of unknownPacks) add('warning', 1, `unknown pack "${p}"; sync it, until then its records are ignored`);
+
+  const agents = { ...registry.reserved_agents, ...(roster || {}) };
+  if (roster) {
+    for (const who of [header.from, header.to]) if (!agents[who]) add('error', 1, `agent "${who}" is not in roster.yaml`);
+  }
+  if (!registry.message_types[header.type]) add('error', 1, `unknown message type "${header.type}" (${Object.keys(registry.message_types).join('|')})`);
+
+  const defs = new Set();
+  const seenIds = {};
+  const usedPacks = new Set(['core']);
+  const known = []; // records that passed lookup, with resolved arg values
+
+  for (const r of parsed.records) {
+    const rec = table[r.code];
+    if (!rec) {
+      const owner = packOfRecord(registry, r.code);
+      if (owner && !unknownPacks.includes(owner)) add('error', r.line, `record "${r.code}" is in pack "${owner}"; declare it in the first line`);
+      else add('warning', r.line, `unknown record "${r.code}"; ignored (sync the language if this is from a newer version)`);
+      continue;
+    }
+    usedPacks.add(rec.pack);
+    // positional/keys order
+    let sawKey = false;
+    for (const t of r.tokens) {
+      if (t.key) sawKey = true;
+      else if (sawKey) { add('error', r.line, `positional value "${t.value}" after a key:value; required values come first`); break; }
+    }
+    const specs = rec.args || [];
+    const required = specs.filter(a => !a.optional).length;
+    if (r.args.length < required) add('error', r.line, `"${r.code}" needs ${required} value(s): ${signature(rec, r.code, registry.sets)}`);
+    if (r.args.length > specs.length) add('error', r.line, `"${r.code}" takes at most ${specs.length} value(s): ${signature(rec, r.code, registry.sets)}`);
+    const vals = {};
+    specs.forEach((spec, i) => {
+      const tok = r.args[i];
+      if (!tok) return;
+      vals[spec.name] = tok.value;
+      if (tok.value === '-' && !tok.quoted && (spec.none_ok || spec.optional)) return;
+      const err = checkValue(registry, spec, tok.value);
+      if (err) add('error', r.line, `${r.code} ${spec.name}: ${err}`);
+    });
+    // keys
+    const seenKeys = new Set();
+    for (const k of r.keys) {
+      const spec = rec.keys[k.key];
+      if (!spec) {
+        add('error', r.line, `"${r.code}" has no key "${k.key}:" (known: ${Object.keys(rec.keys).join(', ') || 'none'}); quote values that contain ":"`);
+        continue;
+      }
+      if (spec.pack) usedPacks.add(spec.pack);
+      if (seenKeys.has(k.key) && !rec.repeat_keys) add('error', r.line, `key "${k.key}:" given twice`);
+      seenKeys.add(k.key);
+      const err = checkValue(registry, spec, k.value);
+      if (err) add('error', r.line, `${r.code} ${k.key}: ${err}`);
+    }
+    if (rec.min_keys && r.keys.length < rec.min_keys) add('error', r.line, `"${r.code}" needs at least ${rec.min_keys} key:value pair(s)`);
+    for (const rule of rec.required_when || []) {
+      const [onArg, allowed] = Object.entries(rule.when)[0];
+      if (allowed.includes(vals[onArg]) && (vals[rule.arg] === undefined || vals[rule.arg] === '-')) {
+        add('error', r.line, `"${r.code}" with ${onArg} ${vals[onArg]} needs a ${rule.arg}`);
+      }
+    }
+    // special rules
+    if (r.code === 'def' && vals.name) {
+      if (defs.has(vals.name)) add('error', r.line, `${vals.name} is defined twice`);
+      defs.add(vals.name);
+    }
+    if (r.code === 'txt' && vals.text) {
+      const words = vals.text.trim().split(/\s+/).length;
+      const max = registry.limits.txt_max_words;
+      if (words > max) add('error', r.line, `txt has ${words} words (max ${max}); put longer text after ---`);
+    }
+    if ((r.code === 'q' || r.code === 'hyp') && vals.id) {
+      const k = `${r.code}:${vals.id}`;
+      if (seenIds[k]) add('warning', r.line, `${r.code} id "${vals.id}" used twice`);
+      seenIds[k] = true;
+    }
+    for (const k of r.keys) if ((k.key === 'by' || k.key === 'to') && roster && !agents[k.value]) add('error', r.line, `agent "${k.value}" is not in roster.yaml`);
+    known.push({ r, rec, vals });
+  }
+
+  // references: defs are valid only inside their own message
+  for (const { r } of known) {
+    const values = r.tokens.map(t => t.value);
+    for (const [i, v] of values.entries()) {
+      if (r.code === 'def' && i === 0) continue;
+      for (const ref of v.match(REF_RE) || []) {
+        if (!defs.has(ref)) add('warning', r.line, `${ref} is not defined in this message (a def is valid only inside its own message)`);
+      }
+    }
+  }
+
+  // declared but unused packs (agents should declare as few as possible)
+  for (const p of header.packs) {
+    if (p !== 'core' && registry.packs[p] && !usedPacks.has(p)) add('warning', 1, `pack "${p}" is declared but not used; declare as few packs as possible`);
+  }
+
+  // message type requirements
+  const mt = registry.message_types[header.type];
+  if (mt) {
+    for (const req of mt.requires || []) {
+      const [kind, matchers] = Object.entries(req)[0];
+      const count = known.filter(({ r, vals }) => matchers.some(m => m.record === r.code && Object.entries(m.where || {}).every(([a, vs]) => vs.includes(vals[a])))).length;
+      const desc = matchers.map(m => m.where ? `${m.record} ${Object.values(m.where)[0].join('/')}` : m.record).join(' or ');
+      if (kind === 'at_least_one_of' && count < 1) add('error', 1, `a "${header.type}" message needs at least one ${desc}`);
+      if (kind === 'exactly_one_of' && count !== 1) add('error', 1, `a "${header.type}" message needs exactly one ${desc} (found ${count})`);
+    }
+  }
+  return problems.sort((a, b) => a.line - b.line);
+}
+
+// ---------------------------------------------------------------- signatures (cards, spec, errors)
+
+/** Human/agent-readable signature, e.g. `ac <id> <result> ["note"] [fix:] `. */
+function signature(rec, code, sets = null) {
+  const parts = [code];
+  for (const a of rec.args || []) {
+    let s;
+    if (a.hint) s = `<${a.hint}>`;
+    else if (a.set) s = `<${a.set}>`;
+    else if (a.values) s = `<${Object.keys(a.values).join('|')}>`;
+    else if (a.type === 'text') s = `"${a.name}"`;
+    else if (a.type === 'amount') s = `<number+${Object.keys(a.units).join('|')}>`;
+    else if (a.type === 'pct') s = '<0-100>';
+    else if (a.type === 'ratio') s = '<passed/total>';
+    else s = `<${a.name}>`;
+    if (a.none_ok) s = s.replace(/>$/, '|->');
+    parts.push(a.optional ? `[${s}]` : s);
+  }
+  for (const [k, spec] of Object.entries(rec.keys || {})) {
+    const vs = spec.values ? Object.keys(spec.values).join('|') : spec.set && sets && sets[spec.set] ? Object.keys(sets[spec.set]).join('|') : spec.type === 'pct' ? '0-100' : '';
+    parts.push(vs ? `${k}:${vs}` : `${k}:`);
+  }
+  return parts.join(' ');
+}
+
+// ---------------------------------------------------------------- translating
+
+function expandRefs(value, defs) {
+  return value.replace(REF_RE, ref => (defs[ref] !== undefined ? defs[ref] : ref));
+}
+
+function label(registry, spec, value) {
+  const values = enumValues(registry, spec);
+  if (values && values[value] !== undefined) return values[value];
+  if (spec.type === 'amount') {
+    const m = /^([0-9.]+)([a-z]+)$/.exec(value);
+    if (m && spec.units[m[2]]) return `${m[1]} ${spec.units[m[2]]}`;
+  }
+  return value;
+}
+
+function render(template, vals) {
+  const filled = template.replace(/\[([^\[\]]*)\]/g, (_, inner) => {
+    const names = [...inner.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+    return names.every(nm => vals[nm] !== undefined) ? inner : '';
+  });
+  return filled.replace(/\{(\w+)\}/g, (_, nm) => (vals[nm] !== undefined ? vals[nm] : ''));
+}
+
+/**
+ * Translate one message to English. Deterministic. Returns {lines, problems}.
+ * Unknown records are shown raw and marked as unknown (fallback rule). Every value is kept.
+ */
+function translateMessage(registry, text, roster = null) {
+  const parsed = parseMessage(text);
+  const problems = lintMessage(registry, text, roster);
+  const lines = [];
+  const h = parsed.header;
+  if (!h) {
+    lines.push('[not a NEXUM message]');
+    return { lines, problems };
+  }
+  const agents = { ...registry.reserved_agents, ...(roster || {}) };
+  const who = c => (agents[c] ? `${agents[c]} (${c})` : c);
+  const mt = registry.message_types[h.type];
+  const kind = mt ? mt.en : `unknown type "${h.type}"`;
+  const ref = h.reply ? `Reply to #${h.id}` : `Message #${h.id}`;
+  lines.push(`${ref} from ${who(h.from)} to ${who(h.to)}: ${kind}. [NEXUM ${h.major}.${h.minor}; packs: ${['core', ...h.packs.filter(p => p !== 'core')].join(', ')}]`);
+
+  const { records: table } = resolvePacks(registry, h.packs);
+  const defs = {};
+  for (const r of parsed.records) if (r.code === 'def' && r.args.length >= 2) defs[r.args[0].value] = r.args[1].value;
+  for (const r of parsed.records) {
+    const rec = table[r.code];
+    if (!rec) {
+      lines.push(`[unknown record, not in nx${h.major}.${h.minor} ${h.packs.join(',')}] ${r.raw}`);
+      continue;
+    }
+    const vals = {};
+    (rec.args || []).forEach((spec, i) => {
+      const tok = r.args[i];
+      if (!tok) return;
+      if (tok.value === '-' && !tok.quoted && (spec.none_ok || spec.optional)) return;
+      vals[spec.name] = r.code === 'def' && i === 0 ? tok.value : label(registry, spec, expandRefs(tok.value, defs));
+    });
+    // extra positional values beyond the spec are kept, not dropped
+    const extra = r.args.slice((rec.args || []).length).map(t => expandRefs(t.value, defs));
+    let line = render(rec.en, vals);
+    const keyParts = r.keys.map(k => {
+      const spec = rec.keys[k.key];
+      const v = expandRefs(k.value, defs);
+      return spec ? `${spec.en}: ${label(registry, spec, v)}` : `${k.key}: ${v}`;
+    });
+    if (extra.length) keyParts.push(`extra values: ${extra.join(' ')}`);
+    if (keyParts.length) line += (rec.args || []).length === 0 ? `: ${keyParts.join('; ')}` : ` (${keyParts.join('; ')})`;
+    lines.push(line);
+  }
+  if (parsed.human !== null) {
+    lines.push('Text for humans (verbatim):');
+    lines.push(parsed.human);
+  }
+  return { lines, problems };
+}
+
+/** Translate text that may hold several messages. */
+function translate(registry, text, roster = null) {
+  return splitMessages(text).map(m => translateMessage(registry, m, roster));
+}
+
+/** Lint text that may hold several messages. */
+function lint(registry, text, roster = null) {
+  return splitMessages(text).map(m => ({ message: m.split('\n')[0], problems: lintMessage(registry, m, roster) }));
+}
+
+const REGISTRY = {"name":"NEXUM","tag":"nx","version":"1.0.0","repository":"NiHanDK/nexum-lang","reserved_agents":{"usr":"user","sys":"automated process"},"message_types":{"do":{"en":"task assignment","requires":[{"at_least_one_of":[{"record":"ctx"},{"record":"step"}]}]},"done":{"en":"task finished","requires":[{"exactly_one_of":[{"record":"v"}]}]},"fail":{"en":"task failed","requires":[{"at_least_one_of":[{"record":"err"},{"record":"v","where":{"status":["fail","blk"]}}]}]},"upd":{"en":"progress update","requires":[]},"ask":{"en":"question","requires":[{"at_least_one_of":[{"record":"q"}]}]}},"sets":{"result":{"ok":"OK","part":"partly met","fail":"failed","blk":"blocked","open":"not assessed yet","skip":"not applicable"},"verdict":{"ok":"OK","part":"partly met","fail":"failed","blk":"blocked"},"progress":{"todo":"to do","doing":"in progress","done":"done","blk":"blocked","skip":"skipped"},"severity":{"b":"blocker","s":"should fix","n":"note"},"change":{"new":"new","mod":"modified","del":"deleted"},"al_object":{"table":"table","tableextension":"tableextension","page":"page","pageextension":"pageextension","pagecustomization":"pagecustomization","codeunit":"codeunit","report":"report","reportextension":"reportextension","query":"query","xmlport":"xmlport","enum":"enum","enumextension":"enumextension","interface":"interface","permissionset":"permissionset","permissionsetextension":"permissionsetextension","profile":"profile","controladdin":"controladdin","entitlement":"entitlement"},"al_perm_object":{"tabledata":"tabledata","table":"table","page":"page","codeunit":"codeunit","report":"report","query":"query","xmlport":"xmlport","system":"system"}},"types":{"id":{"pattern":"^[A-Za-z0-9][A-Za-z0-9._-]*$","en":"short ID"},"int":{"pattern":"^[0-9]+$","en":"whole number"},"pct":{"pattern":"^(100|[1-9]?[0-9])$","en":"whole number 0-100"},"agent":{"pattern":"^[a-z][a-z0-9]*$","en":"agent code"},"defname":{"pattern":"^\\$[a-z0-9]+$","en":"reference name"},"ratio":{"pattern":"^[0-9]+/[0-9]+$","en":"passed/total"},"text":{"en":"text"},"value":{"en":"value"},"loc":{"en":"location (path","path#line":null,"path#from-to or -)":null}},"limits":{"txt_max_words":25},"card_intro":"First line: @nx<ver> <packs> <from>><to> <type> #<id> (a reply uses ^<id> of the message it answers). Then one record per line.\nTypes: do=task (needs ctx or step) | done=finished (exactly one v) | fail=failed (err, or v fail/blk) | upd=progress | ask=question (needs q).\nRecord: code, required args in order, then optional key:value in any order. [x] = optional.\nQuote a value only if it has a space, quote or colon; \\\" inside quotes. - = none. path#12 or path#12-30. Lists: a|b. Confidence 0-100.\nNever shorten names, IDs, paths, error texts, code, versions.\ndef $x is valid only in its own message; copy the def lines when forwarding records.\nA line --- ends NEXUM; everything after it is text for humans, passed on verbatim.\nUnknown version or pack: try to sync it; else use what you understand, ignore unknown records, tell the user.\nAgent codes come from roster.yaml; reserved: usr (user), sys (automation). Declare as few packs as possible.\nNo fitting record? Use txt, and propose one with ext.\n","packs":{"core":{"description":"Records almost any agent setup needs.","records":{"def":{"meaning":"define a reference","en":"Define {name} = {value}","args":[{"name":"name","type":"defname"},{"name":"value","type":"value"}],"example":"def $src \"app/Debt Collection\""},"ctx":{"meaning":"context the task depends on","en":"Context","args":[],"repeat_keys":true,"min_keys":1,"keys":{"task":{"type":"value","en":"task"},"file":{"type":"value","en":"file"},"dir":{"type":"value","en":"folder"},"url":{"type":"value","en":"URL"},"branch":{"type":"value","en":"branch"},"commit":{"type":"value","en":"commit"},"ver":{"type":"value","en":"version"},"env":{"type":"value","en":"environment"}},"example":"ctx task:EVIT-1740 file:\"$src/X.al\" branch:fix-1"},"ac":{"meaning":"acceptance criterion status","en":"Acceptance criterion {id}: {status}[ — {note}]","args":[{"name":"id","type":"id"},{"name":"status","set":"result"},{"name":"note","type":"text","optional":true}],"required_when":[{"arg":"note","when":{"status":["part","fail","blk"]}}],"example":"ac 4 part \"missing Customer No. filter\""},"f":{"meaning":"finding","en":"Finding ({sev})[ at {loc}]: {what}","args":[{"name":"sev","set":"severity"},{"name":"loc","type":"loc","none_ok":true},{"name":"what","type":"text"}],"keys":{"fix":{"type":"text","en":"suggested fix"},"ac":{"type":"id","en":"acceptance criterion"},"id":{"type":"id","en":"finding ID"}},"example":"f b \"$src/X.al#212\" \"applies by Document No. only\" fix:\"add SetRange\" ac:4"},"chk":{"meaning":"checklist item","en":"Check {status}: {item}","args":[{"name":"status","set":"result"},{"name":"item","type":"text"}],"keys":{"note":{"type":"text","en":"note"}},"example":"chk ok \"migration script runs\""},"step":{"meaning":"plan step","en":"Step {n} ({status}): {what}","args":[{"name":"n","type":"int"},{"name":"status","set":"progress"},{"name":"what","type":"text"}],"keys":{"by":{"type":"agent","en":"done by"}},"example":"step 2 doing \"update codeunit\" by:dev"},"out":{"meaning":"something produced","en":"Output {target}[ — {desc}]","args":[{"name":"target","type":"value"},{"name":"desc","type":"text","optional":true}],"keys":{"kind":{"en":"kind","values":{"file":"file","doc":"document","pr":"pull request","commit":"commit","url":"link"}}},"example":"out \"docs/EVIT-1740.md\" \"design\" kind:doc"},"err":{"meaning":"error, exact text","en":"Error: {text}","args":[{"name":"text","type":"text"}],"keys":{"src":{"type":"value","en":"source"},"at":{"type":"loc","en":"location"}},"example":"err \"Field X does not exist\" src:build"},"hyp":{"meaning":"hypothesis with confidence","en":"Hypothesis {id} ({conf}% confidence): {statement}","args":[{"name":"id","type":"id"},{"name":"conf","type":"pct"},{"name":"statement","type":"text"}],"keys":{"st":{"en":"status","values":{"open":"open","conf":"confirmed","rej":"rejected"}},"ev":{"type":"text","en":"evidence"}},"example":"hyp h1 70 \"duplicate posts come from job queue\" st:open"},"q":{"meaning":"question that needs an answer","en":"Question {id}: {question}","args":[{"name":"id","type":"id"},{"name":"question","type":"text"}],"keys":{"opt":{"type":"text","en":"options"},"to":{"type":"agent","en":"asked to"}},"example":"q q1 \"which company to test in?\" opt:\"CRONUS|EV Test\""},"a":{"meaning":"answer to a question","en":"Answer to {id}: {answer}","args":[{"name":"id","type":"id"},{"name":"answer","type":"text"}],"example":"a q1 CRONUS"},"need":{"meaning":"something missing","en":"Needs {kind}: {what}","args":[{"name":"kind","values":{"input":"input","perm":"permission","skill":"skill","tool":"tool"}},{"name":"what","type":"text"}],"example":"need skill \"AL report layouts\""},"v":{"meaning":"overall verdict","en":"Verdict: {status}[ — {reason}]","args":[{"name":"status","set":"verdict"},{"name":"reason","type":"text","optional":true}],"required_when":[{"arg":"reason","when":{"status":["part","fail","blk"]}}],"example":"v part \"AC 4 not met\""},"ext":{"meaning":"language extension proposal","en":"Language proposal ({kind}) {name}: {why}","args":[{"name":"kind","values":{"rec":"new record","key":"new key","val":"new value","pack":"new pack","dep":"deprecation"}},{"name":"name","type":"value"},{"name":"why","type":"text"}],"keys":{"ex":{"type":"text","en":"example"},"pack":{"type":"value","en":"target pack"}},"example":"ext rec tst \"need test counts\" ex:\"tst 41/42\" pack:dev"},"txt":{"meaning":"short free text, last resort (max 25 words)","en":"Note: {text}","args":[{"name":"text","type":"text"}],"example":"txt \"customer prefers Friday deploy\""}},"extends":{},"sets":[]},"bc":{"description":"Business Central and AL (objects, fields, events, permissions, upgrade code, report layouts, APIs).","records":{"obj":{"meaning":"AL object","en":"AL {type} {id} {name}","args":[{"name":"type","set":"al_object"},{"name":"id","type":"int"},{"name":"name","type":"value"}],"keys":{"st":{"set":"change","en":"status"},"ext":{"type":"value","en":"extends"}},"example":"obj codeunit 50120 \"HortenAdvisMgt IFPS\" st:mod"},"fld":{"meaning":"table field","en":"Field {no} {name} on {table}","args":[{"name":"table","type":"value"},{"name":"no","type":"int"},{"name":"name","type":"value"}],"keys":{"st":{"set":"change","en":"status"},"type":{"type":"value","en":"AL type"}},"example":"fld \"Cust. Ledger Entry\" 50100 \"Rykker Status\" st:new type:Enum"},"evt":{"meaning":"event publisher or subscriber","en":"Event {role} {object}.{event}","args":[{"name":"role","values":{"pub":"publisher","sub":"subscriber"}},{"name":"object","type":"value"},{"name":"event","type":"value"}],"keys":{"st":{"set":"change","en":"status"}},"example":"evt sub \"Sales-Post\" OnAfterPostSalesDoc st:new"},"perm":{"meaning":"permission in a permission set","en":"Permission set {set}: {type} {object} = {rights}","args":[{"name":"set","type":"value"},{"name":"type","set":"al_perm_object"},{"name":"object","type":"value"},{"name":"rights","type":"value","pattern":"^(-|[RIMDX]+)$","hint":"RIMDX|-"}],"example":"perm \"EV DEBT\" tabledata \"Rykker Log\" RIMD"},"upg":{"meaning":"upgrade code with upgrade tag","en":"Upgrade in {codeunit}, tag {tag}[ — {what}]","args":[{"name":"codeunit","type":"value"},{"name":"tag","type":"value"},{"name":"what","type":"text","optional":true}],"example":"upg \"EV Upgrade\" \"EV-1740-RykkerStatus\" \"fill new status field\""},"lay":{"meaning":"report layout","en":"Layout {name} ({kind}) for report {report}","args":[{"name":"report","type":"value"},{"name":"name","type":"value"},{"name":"kind","values":{"rdlc":"RDLC","word":"Word","excel":"Excel","custom":"custom"}}],"keys":{"st":{"set":"change","en":"status"},"def":{"en":"default layout","values":{"y":"yes","n":"no"}}},"example":"lay \"EV Rykker\" \"EV Rykker DK\" word st:new def:y"},"api":{"meaning":"API page or query","en":"API {object} at {route}/{entity}","args":[{"name":"object","type":"value"},{"name":"route","type":"value","pattern":"^[^/\\s]+/[^/\\s]+/[^/\\s]+$","hint":"publisher/group/version"},{"name":"entity","type":"value"}],"keys":{"st":{"set":"change","en":"status"},"ops":{"type":"text","en":"operations"}},"example":"api \"EV Rykker API\" ev/debt/v1.0 rykkers st:new ops:\"GET|PATCH\""}},"extends":{"ctx":{"keys":{"app":{"type":"value","en":"extension"},"co":{"type":"value","en":"company"},"tenant":{"type":"value","en":"tenant"}}},"f":{"keys":{"rule":{"type":"value","en":"rule"}}},"err":{"keys":{"rule":{"type":"value","en":"rule"}}}},"sets":["al_object","al_perm_object"]},"bcops":{"description":"Business Central operations (telemetry).","records":{"tel":{"meaning":"telemetry observation","en":"Telemetry {event}: {count} times[ — {observation}]","args":[{"name":"event","type":"id"},{"name":"count","type":"int"},{"name":"observation","type":"text","optional":true}],"keys":{"per":{"type":"value","en":"period"},"obj":{"type":"value","en":"object"}},"example":"tel RT0005 37 \"long SQL on rykker posting\" per:7d obj:\"HortenAdvisMgt IFPS\""}},"extends":{},"sets":[]},"dev":{"description":"General software development (builds, tests, changes, estimates, dependencies, HTTP calls).","records":{"bld":{"meaning":"build result","en":"Build {status}","args":[{"name":"status","values":{"ok":"succeeded","fail":"failed"}}],"keys":{"warn":{"type":"int","en":"warnings"},"err":{"type":"int","en":"errors"},"tool":{"type":"value","en":"tool"}},"example":"bld fail err:2 warn:14 tool:alc"},"tst":{"meaning":"test run summary","en":"Tests: {result} passed","args":[{"name":"result","type":"ratio"}],"keys":{"fail":{"type":"int","en":"failed"},"skip":{"type":"int","en":"skipped"},"suite":{"type":"value","en":"suite"}},"example":"tst 41/42 fail:1 suite:DebtColl"},"tc":{"meaning":"single test case","en":"Test {name}: {status}[ — {note}]","args":[{"name":"name","type":"value"},{"name":"status","values":{"ok":"passed","fail":"failed","skip":"skipped"}},{"name":"note","type":"text","optional":true}],"example":"tc TestHortenFallback fail \"expected 1 entry, got 2\""},"chg":{"meaning":"change to a file","en":"Change {kind} {path}[ — {what}]","args":[{"name":"path","type":"value"},{"name":"kind","values":{"add":"added","mod":"modified","del":"deleted","ren":"renamed"}},{"name":"what","type":"text","optional":true}],"example":"chg \"$src/X.al\" mod \"added Customer No. filter\""},"est":{"meaning":"estimate","en":"Estimate {amount}[ — {basis}]","args":[{"name":"amount","type":"amount","units":{"h":"hours","d":"days","sp":"story points"}},{"name":"basis","type":"text","optional":true}],"keys":{"conf":{"type":"pct","en":"confidence (%)"}},"example":"est 6h \"2 codeunits + tests\" conf:60"},"dep":{"meaning":"dependency change","en":"Dependency {name} {ver}: {action}","args":[{"name":"name","type":"value"},{"name":"ver","type":"value"},{"name":"action","values":{"add":"added","upd":"updated","rm":"removed"}}],"example":"dep \"Base Application\" 25.0 upd"},"http":{"meaning":"HTTP call made","en":"HTTP {method} {url} → {status}[ — {note}]","args":[{"name":"method","values":{"GET":"GET","POST":"POST","PUT":"PUT","PATCH":"PATCH","DELETE":"DELETE","HEAD":"HEAD","OPTIONS":"OPTIONS"}},{"name":"url","type":"value"},{"name":"status","type":"int"},{"name":"note","type":"text","optional":true}],"keys":{"ms":{"type":"int","en":"duration ms"}},"example":"http PATCH \"$base/rykkers(123)\" 400 \"missing If-Match\" ms:212"}},"extends":{"ctx":{"keys":{"repo":{"type":"value","en":"repository"},"pr":{"type":"value","en":"pull request"},"run":{"type":"value","en":"build/pipeline run"}}}},"sets":[]}}};
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function run() {
+  const text = document.getElementById('msg').value;
+  let roster = null;
+  try { const r = parseRoster(document.getElementById('roster').value); roster = Object.keys(r).length ? r : null; } catch (e) { roster = null; }
+  const results = translate(REGISTRY, text, roster);
+  const out = document.getElementById('out');
+  if (!results.length) { out.innerHTML = '<p class="empty">Paste one or more messages. Each starts with @nx.</p>'; return; }
+  out.innerHTML = results.map(r => {
+    const humanAt = r.lines.indexOf('Text for humans (verbatim):');
+    const body = humanAt >= 0 ? r.lines.slice(1, humanAt) : r.lines.slice(1);
+    const human = humanAt >= 0 ? r.lines.slice(humanAt + 1).join('\n') : null;
+    const items = body.map(l => '<li' + (l.startsWith('[unknown record') ? ' class="unknown"' : '') + '>' + esc(l) + '</li>').join('');
+    const probs = r.problems.length
+      ? r.problems.map(p => '<div class="p ' + p.level + '">' + p.level + ' (line ' + p.line + '): ' + esc(p.msg) + '</div>').join('')
+      : '<div class="ok">Valid message.</div>';
+    return '<div class="msg"><div class="head">' + esc(r.lines[0]) + '</div><ul>' + items + '</ul>'
+      + (human !== null ? '<div><label>Text for humans</label><pre class="human">' + esc(human) + '</pre></div>' : '')
+      + probs + '</div>';
+  }).join('');
+}
+document.getElementById('msg').addEventListener('input', run);
+document.getElementById('roster').addEventListener('input', run);
+run();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+@nx1.0 core,bc,bcops sup>or done ^2
+ctx task:EVIT-1802 tenant:prod co:"EV Evita A/S"
+tel RT0005 37 "long SQL on rykker posting" per:7d obj:"HortenAdvisMgt IFPS"
+hyp h1 80 "missing key on Rykker Log" st:conf
+v ok
+---
+traces
+| where customDimensions.eventId == "RT0005"
+| summarize count() by bin(timestamp, 1d)

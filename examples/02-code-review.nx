@@ -1,0 +1,8 @@
+@nx1.0 core cr>or done ^7
+def $dc "ev-evita/app/Debt Collection"
+ctx task:EVIT-1740
+ac 1 ok
+ac 4 part "Horten fallback lacks Customer No. filter"
+f b "$dc/HortenAdvisMgt_IFPS.Codeunit.al#212" "applies by Document No. only" fix:"add SetRange(\"Customer No.\", ...)" ac:4
+f n - "consider a test for two customers with the same Document No."
+v part "AC 4 not met"

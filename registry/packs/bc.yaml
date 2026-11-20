@@ -1,0 +1,131 @@
+# NEXUM bc pack: Microsoft Dynamics 365 Business Central and AL.
+# Object types are full AL keywords, never abbreviated.
+
+pack: bc
+description: Business Central and AL (objects, fields, events, permissions, upgrade code, report layouts, APIs).
+
+sets:
+  al_object:
+    table: table
+    tableextension: tableextension
+    page: page
+    pageextension: pageextension
+    pagecustomization: pagecustomization
+    codeunit: codeunit
+    report: report
+    reportextension: reportextension
+    query: query
+    xmlport: xmlport
+    enum: enum
+    enumextension: enumextension
+    interface: interface
+    permissionset: permissionset
+    permissionsetextension: permissionsetextension
+    profile: profile
+    controladdin: controladdin
+    entitlement: entitlement
+  al_perm_object:
+    tabledata: tabledata
+    table: table
+    page: page
+    codeunit: codeunit
+    report: report
+    query: query
+    xmlport: xmlport
+    system: system
+
+records:
+  obj:
+    meaning: AL object
+    en: "AL {type} {id} {name}"
+    args:
+      - {name: type, set: al_object}
+      - {name: id, type: int}
+      - {name: name, type: value}
+    keys:
+      st: {set: change, en: status}
+      ext: {type: value, en: extends}
+    example: 'obj codeunit 50120 "HortenAdvisMgt IFPS" st:mod'
+
+  fld:
+    meaning: table field
+    en: "Field {no} {name} on {table}"
+    args:
+      - {name: table, type: value}
+      - {name: no, type: int}
+      - {name: name, type: value}
+    keys:
+      st: {set: change, en: status}
+      type: {type: value, en: AL type}
+    example: 'fld "Cust. Ledger Entry" 50100 "Rykker Status" st:new type:Enum'
+
+  evt:
+    meaning: event publisher or subscriber
+    en: "Event {role} {object}.{event}"
+    args:
+      - name: role
+        values: {pub: publisher, sub: subscriber}
+      - {name: object, type: value}
+      - {name: event, type: value}
+    keys:
+      st: {set: change, en: status}
+    example: 'evt sub "Sales-Post" OnAfterPostSalesDoc st:new'
+
+  perm:
+    meaning: permission in a permission set
+    en: "Permission set {set}: {type} {object} = {rights}"
+    args:
+      - {name: set, type: value}
+      - {name: type, set: al_perm_object}
+      - {name: object, type: value}
+      - {name: rights, type: value, pattern: '^(-|[RIMDX]+)$', hint: 'RIMDX|-'}
+    example: 'perm "EV DEBT" tabledata "Rykker Log" RIMD'
+
+  upg:
+    meaning: upgrade code with upgrade tag
+    en: "Upgrade in {codeunit}, tag {tag}[ — {what}]"
+    args:
+      - {name: codeunit, type: value}
+      - {name: tag, type: value}
+      - {name: what, type: text, optional: true}
+    example: 'upg "EV Upgrade" "EV-1740-RykkerStatus" "fill new status field"'
+
+  lay:
+    meaning: report layout
+    en: "Layout {name} ({kind}) for report {report}"
+    args:
+      - {name: report, type: value}
+      - {name: name, type: value}
+      - name: kind
+        values: {rdlc: RDLC, word: Word, excel: Excel, custom: custom}
+    keys:
+      st: {set: change, en: status}
+      def:
+        en: default layout
+        values: {y: yes, n: no}
+    example: 'lay "EV Rykker" "EV Rykker DK" word st:new def:y'
+
+  api:
+    meaning: API page or query
+    en: "API {object} at {route}/{entity}"
+    args:
+      - {name: object, type: value}
+      - {name: route, type: value, pattern: '^[^/\s]+/[^/\s]+/[^/\s]+$', hint: publisher/group/version}
+      - {name: entity, type: value}
+    keys:
+      st: {set: change, en: status}
+      ops: {type: text, en: operations}
+    example: 'api "EV Rykker API" ev/debt/v1.0 rykkers st:new ops:"GET|PATCH"'
+
+extends:
+  ctx:
+    keys:
+      app: {type: value, en: extension}
+      co: {type: value, en: company}
+      tenant: {type: value, en: tenant}
+  f:
+    keys:
+      rule: {type: value, en: rule}
+  err:
+    keys:
+      rule: {type: value, en: rule}

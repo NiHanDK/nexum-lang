@@ -1,0 +1,15 @@
+# Example roster for the EV setup: agent code -> agent name.
+agents:
+  or: orchestrator
+  po: product-owner
+  sa: solution-architect
+  dev: developer
+  qa: test-qa
+  cr: code-reviewer
+  sec: security-appsource
+  doc: documentation
+  sup: support-diagnostics
+  rel: release-upgrade
+  mw: manual-writer
+  mv: manual-validator
+  sk: skill-keeper
