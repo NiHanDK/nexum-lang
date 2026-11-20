@@ -70,8 +70,8 @@ npm run check   # build + tests + budget check + compatibility check
 
 These settings live in GitHub and cannot be set from the code:
 
-1. **Branch protection on `main`** (Settings → Branches, or a ruleset): require a pull request, require review from Code Owners, require the status check **CI / check**, and do not allow bypassing.
+1. **Ruleset "Protect main"** (done): pull request required, Code Owner review required, stale approvals dismissed, status check `check` required, no deletions or force pushes. The repository is public because GitHub enforces rulesets on private repositories only on paid plans. Bypass: *Repository admin, for pull requests only*: PRs opened from Claude sessions are authored as the owner, and GitHub does not allow approving your own PR, so the owner merges those with the bypass. Direct pushes to `main` stay blocked, and CI must still pass.
 2. **Secrets** (Settings → Secrets and variables → Actions):
    - `ANTHROPIC_API_KEY`: enables the steward and reviewer agents and exact token counting in the budget check. Without it, those workflows are skipped and the budget check uses a conservative estimate.
-   - `NEXUM_BOT_TOKEN` (optional): a fine-grained token or GitHub App token with contents, issues and pull-requests write. With it, CI runs on the steward's pull requests. With only the default token, GitHub does not start workflows for PRs that a workflow created.
+   - `NEXUM_BOT_TOKEN` (optional): a token from a bot (GitHub App or a separate account, not the owner's own token) with contents, issues and pull-requests write. With it, CI runs on the steward's pull requests. With only the default token, GitHub does not start workflows for PRs that a workflow created. Delete the secret rather than leave a placeholder in it.
 3. **Setups that send proposals** need `gh` logged in with permission to open issues in this repository.
