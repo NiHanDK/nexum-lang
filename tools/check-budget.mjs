@@ -34,8 +34,12 @@ export async function checkBudget(registry, budgets) {
   return { failures, report, method };
 }
 
+/** Files changed since `base`, as {status, path}. Status M = modified, A = added, D = deleted. */
 function changedFiles(base) {
-  return execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean);
+  return execFileSync('git', ['diff', '--name-status', `${base}...HEAD`], { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .map(l => { const [status, ...rest] = l.split('\t'); return { status: status[0], path: rest[rest.length - 1] }; });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -47,7 +51,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const baseIdx = process.argv.indexOf('--base');
   if (baseIdx > 0) {
     const files = changedFiles(process.argv[baseIdx + 1]);
-    if (files.includes('budgets.yaml') && files.some(f => f.startsWith('registry/'))) {
+    // Creating budgets.yaml (first version) is fine; changing an existing budget must be its own PR.
+    const budgetsChanged = files.some(f => f.path === 'budgets.yaml' && f.status !== 'A');
+    if (budgetsChanged && files.some(f => f.path.startsWith('registry/'))) {
       failures.push('budgets.yaml and registry/ changed in the same PR; change budgets in a separate PR');
     }
   }
