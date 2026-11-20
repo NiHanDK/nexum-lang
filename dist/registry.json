@@ -1,0 +1,1067 @@
+{
+  "name": "NEXUM",
+  "tag": "nx",
+  "version": "1.0.0",
+  "repository": "NiHanDK/nexum-lang",
+  "reserved_agents": {
+    "usr": "user",
+    "sys": "automated process"
+  },
+  "message_types": {
+    "do": {
+      "en": "task assignment",
+      "requires": [
+        {
+          "at_least_one_of": [
+            {
+              "record": "ctx"
+            },
+            {
+              "record": "step"
+            }
+          ]
+        }
+      ]
+    },
+    "done": {
+      "en": "task finished",
+      "requires": [
+        {
+          "exactly_one_of": [
+            {
+              "record": "v"
+            }
+          ]
+        }
+      ]
+    },
+    "fail": {
+      "en": "task failed",
+      "requires": [
+        {
+          "at_least_one_of": [
+            {
+              "record": "err"
+            },
+            {
+              "record": "v",
+              "where": {
+                "status": [
+                  "fail",
+                  "blk"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "upd": {
+      "en": "progress update",
+      "requires": []
+    },
+    "ask": {
+      "en": "question",
+      "requires": [
+        {
+          "at_least_one_of": [
+            {
+              "record": "q"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "sets": {
+    "result": {
+      "ok": "OK",
+      "part": "partly met",
+      "fail": "failed",
+      "blk": "blocked",
+      "open": "not assessed yet",
+      "skip": "not applicable"
+    },
+    "verdict": {
+      "ok": "OK",
+      "part": "partly met",
+      "fail": "failed",
+      "blk": "blocked"
+    },
+    "progress": {
+      "todo": "to do",
+      "doing": "in progress",
+      "done": "done",
+      "blk": "blocked",
+      "skip": "skipped"
+    },
+    "severity": {
+      "b": "blocker",
+      "s": "should fix",
+      "n": "note"
+    },
+    "change": {
+      "new": "new",
+      "mod": "modified",
+      "del": "deleted"
+    },
+    "al_object": {
+      "table": "table",
+      "tableextension": "tableextension",
+      "page": "page",
+      "pageextension": "pageextension",
+      "pagecustomization": "pagecustomization",
+      "codeunit": "codeunit",
+      "report": "report",
+      "reportextension": "reportextension",
+      "query": "query",
+      "xmlport": "xmlport",
+      "enum": "enum",
+      "enumextension": "enumextension",
+      "interface": "interface",
+      "permissionset": "permissionset",
+      "permissionsetextension": "permissionsetextension",
+      "profile": "profile",
+      "controladdin": "controladdin",
+      "entitlement": "entitlement"
+    },
+    "al_perm_object": {
+      "tabledata": "tabledata",
+      "table": "table",
+      "page": "page",
+      "codeunit": "codeunit",
+      "report": "report",
+      "query": "query",
+      "xmlport": "xmlport",
+      "system": "system"
+    }
+  },
+  "types": {
+    "id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "en": "short ID"
+    },
+    "int": {
+      "pattern": "^[0-9]+$",
+      "en": "whole number"
+    },
+    "pct": {
+      "pattern": "^(100|[1-9]?[0-9])$",
+      "en": "whole number 0-100"
+    },
+    "agent": {
+      "pattern": "^[a-z][a-z0-9]*$",
+      "en": "agent code"
+    },
+    "defname": {
+      "pattern": "^\\$[a-z0-9]+$",
+      "en": "reference name"
+    },
+    "ratio": {
+      "pattern": "^[0-9]+/[0-9]+$",
+      "en": "passed/total"
+    },
+    "text": {
+      "en": "text"
+    },
+    "value": {
+      "en": "value"
+    },
+    "loc": {
+      "en": "location (path",
+      "path#line": null,
+      "path#from-to or -)": null
+    }
+  },
+  "limits": {
+    "txt_max_words": 25
+  },
+  "card_intro": "First line: @nx<ver> <packs> <from>><to> <type> #<id> (a reply uses ^<id> of the message it answers). Then one record per line.\nTypes: do=task (needs ctx or step) | done=finished (exactly one v) | fail=failed (err, or v fail/blk) | upd=progress | ask=question (needs q).\nRecord: code, required args in order, then optional key:value in any order. [x] = optional.\nQuote a value only if it has a space, quote or colon; \\\" inside quotes. - = none. path#12 or path#12-30. Lists: a|b. Confidence 0-100.\nNever shorten names, IDs, paths, error texts, code, versions.\ndef $x is valid only in its own message; copy the def lines when forwarding records.\nA line --- ends NEXUM; everything after it is text for humans, passed on verbatim.\nUnknown version or pack: try to sync it; else use what you understand, ignore unknown records, tell the user.\nAgent codes come from roster.yaml; reserved: usr (user), sys (automation). Declare as few packs as possible.\nNo fitting record? Use txt, and propose one with ext.\n",
+  "packs": {
+    "core": {
+      "description": "Records almost any agent setup needs.",
+      "records": {
+        "def": {
+          "meaning": "define a reference",
+          "en": "Define {name} = {value}",
+          "args": [
+            {
+              "name": "name",
+              "type": "defname"
+            },
+            {
+              "name": "value",
+              "type": "value"
+            }
+          ],
+          "example": "def $src \"app/Debt Collection\""
+        },
+        "ctx": {
+          "meaning": "context the task depends on",
+          "en": "Context",
+          "args": [],
+          "repeat_keys": true,
+          "min_keys": 1,
+          "keys": {
+            "task": {
+              "type": "value",
+              "en": "task"
+            },
+            "file": {
+              "type": "value",
+              "en": "file"
+            },
+            "dir": {
+              "type": "value",
+              "en": "folder"
+            },
+            "url": {
+              "type": "value",
+              "en": "URL"
+            },
+            "branch": {
+              "type": "value",
+              "en": "branch"
+            },
+            "commit": {
+              "type": "value",
+              "en": "commit"
+            },
+            "ver": {
+              "type": "value",
+              "en": "version"
+            },
+            "env": {
+              "type": "value",
+              "en": "environment"
+            }
+          },
+          "example": "ctx task:EVIT-1740 file:\"$src/X.al\" branch:fix-1"
+        },
+        "ac": {
+          "meaning": "acceptance criterion status",
+          "en": "Acceptance criterion {id}: {status}[ — {note}]",
+          "args": [
+            {
+              "name": "id",
+              "type": "id"
+            },
+            {
+              "name": "status",
+              "set": "result"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "required_when": [
+            {
+              "arg": "note",
+              "when": {
+                "status": [
+                  "part",
+                  "fail",
+                  "blk"
+                ]
+              }
+            }
+          ],
+          "example": "ac 4 part \"missing Customer No. filter\""
+        },
+        "f": {
+          "meaning": "finding",
+          "en": "Finding ({sev})[ at {loc}]: {what}",
+          "args": [
+            {
+              "name": "sev",
+              "set": "severity"
+            },
+            {
+              "name": "loc",
+              "type": "loc",
+              "none_ok": true
+            },
+            {
+              "name": "what",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "fix": {
+              "type": "text",
+              "en": "suggested fix"
+            },
+            "ac": {
+              "type": "id",
+              "en": "acceptance criterion"
+            },
+            "id": {
+              "type": "id",
+              "en": "finding ID"
+            }
+          },
+          "example": "f b \"$src/X.al#212\" \"applies by Document No. only\" fix:\"add SetRange\" ac:4"
+        },
+        "chk": {
+          "meaning": "checklist item",
+          "en": "Check {status}: {item}",
+          "args": [
+            {
+              "name": "status",
+              "set": "result"
+            },
+            {
+              "name": "item",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "note": {
+              "type": "text",
+              "en": "note"
+            }
+          },
+          "example": "chk ok \"migration script runs\""
+        },
+        "step": {
+          "meaning": "plan step",
+          "en": "Step {n} ({status}): {what}",
+          "args": [
+            {
+              "name": "n",
+              "type": "int"
+            },
+            {
+              "name": "status",
+              "set": "progress"
+            },
+            {
+              "name": "what",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "by": {
+              "type": "agent",
+              "en": "done by"
+            }
+          },
+          "example": "step 2 doing \"update codeunit\" by:dev"
+        },
+        "out": {
+          "meaning": "something produced",
+          "en": "Output {target}[ — {desc}]",
+          "args": [
+            {
+              "name": "target",
+              "type": "value"
+            },
+            {
+              "name": "desc",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "keys": {
+            "kind": {
+              "en": "kind",
+              "values": {
+                "file": "file",
+                "doc": "document",
+                "pr": "pull request",
+                "commit": "commit",
+                "url": "link"
+              }
+            }
+          },
+          "example": "out \"docs/EVIT-1740.md\" \"design\" kind:doc"
+        },
+        "err": {
+          "meaning": "error, exact text",
+          "en": "Error: {text}",
+          "args": [
+            {
+              "name": "text",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "src": {
+              "type": "value",
+              "en": "source"
+            },
+            "at": {
+              "type": "loc",
+              "en": "location"
+            }
+          },
+          "example": "err \"Field X does not exist\" src:build"
+        },
+        "hyp": {
+          "meaning": "hypothesis with confidence",
+          "en": "Hypothesis {id} ({conf}% confidence): {statement}",
+          "args": [
+            {
+              "name": "id",
+              "type": "id"
+            },
+            {
+              "name": "conf",
+              "type": "pct"
+            },
+            {
+              "name": "statement",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "st": {
+              "en": "status",
+              "values": {
+                "open": "open",
+                "conf": "confirmed",
+                "rej": "rejected"
+              }
+            },
+            "ev": {
+              "type": "text",
+              "en": "evidence"
+            }
+          },
+          "example": "hyp h1 70 \"duplicate posts come from job queue\" st:open"
+        },
+        "q": {
+          "meaning": "question that needs an answer",
+          "en": "Question {id}: {question}",
+          "args": [
+            {
+              "name": "id",
+              "type": "id"
+            },
+            {
+              "name": "question",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "opt": {
+              "type": "text",
+              "en": "options"
+            },
+            "to": {
+              "type": "agent",
+              "en": "asked to"
+            }
+          },
+          "example": "q q1 \"which company to test in?\" opt:\"CRONUS|EV Test\""
+        },
+        "a": {
+          "meaning": "answer to a question",
+          "en": "Answer to {id}: {answer}",
+          "args": [
+            {
+              "name": "id",
+              "type": "id"
+            },
+            {
+              "name": "answer",
+              "type": "text"
+            }
+          ],
+          "example": "a q1 CRONUS"
+        },
+        "need": {
+          "meaning": "something missing",
+          "en": "Needs {kind}: {what}",
+          "args": [
+            {
+              "name": "kind",
+              "values": {
+                "input": "input",
+                "perm": "permission",
+                "skill": "skill",
+                "tool": "tool"
+              }
+            },
+            {
+              "name": "what",
+              "type": "text"
+            }
+          ],
+          "example": "need skill \"AL report layouts\""
+        },
+        "v": {
+          "meaning": "overall verdict",
+          "en": "Verdict: {status}[ — {reason}]",
+          "args": [
+            {
+              "name": "status",
+              "set": "verdict"
+            },
+            {
+              "name": "reason",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "required_when": [
+            {
+              "arg": "reason",
+              "when": {
+                "status": [
+                  "part",
+                  "fail",
+                  "blk"
+                ]
+              }
+            }
+          ],
+          "example": "v part \"AC 4 not met\""
+        },
+        "ext": {
+          "meaning": "language extension proposal",
+          "en": "Language proposal ({kind}) {name}: {why}",
+          "args": [
+            {
+              "name": "kind",
+              "values": {
+                "rec": "new record",
+                "key": "new key",
+                "val": "new value",
+                "pack": "new pack",
+                "dep": "deprecation"
+              }
+            },
+            {
+              "name": "name",
+              "type": "value"
+            },
+            {
+              "name": "why",
+              "type": "text"
+            }
+          ],
+          "keys": {
+            "ex": {
+              "type": "text",
+              "en": "example"
+            },
+            "pack": {
+              "type": "value",
+              "en": "target pack"
+            }
+          },
+          "example": "ext rec tst \"need test counts\" ex:\"tst 41/42\" pack:dev"
+        },
+        "txt": {
+          "meaning": "short free text, last resort (max 25 words)",
+          "en": "Note: {text}",
+          "args": [
+            {
+              "name": "text",
+              "type": "text"
+            }
+          ],
+          "example": "txt \"customer prefers Friday deploy\""
+        }
+      },
+      "extends": {},
+      "sets": []
+    },
+    "bc": {
+      "description": "Business Central and AL (objects, fields, events, permissions, upgrade code, report layouts, APIs).",
+      "records": {
+        "obj": {
+          "meaning": "AL object",
+          "en": "AL {type} {id} {name}",
+          "args": [
+            {
+              "name": "type",
+              "set": "al_object"
+            },
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "name",
+              "type": "value"
+            }
+          ],
+          "keys": {
+            "st": {
+              "set": "change",
+              "en": "status"
+            },
+            "ext": {
+              "type": "value",
+              "en": "extends"
+            }
+          },
+          "example": "obj codeunit 50120 \"HortenAdvisMgt IFPS\" st:mod"
+        },
+        "fld": {
+          "meaning": "table field",
+          "en": "Field {no} {name} on {table}",
+          "args": [
+            {
+              "name": "table",
+              "type": "value"
+            },
+            {
+              "name": "no",
+              "type": "int"
+            },
+            {
+              "name": "name",
+              "type": "value"
+            }
+          ],
+          "keys": {
+            "st": {
+              "set": "change",
+              "en": "status"
+            },
+            "type": {
+              "type": "value",
+              "en": "AL type"
+            }
+          },
+          "example": "fld \"Cust. Ledger Entry\" 50100 \"Rykker Status\" st:new type:Enum"
+        },
+        "evt": {
+          "meaning": "event publisher or subscriber",
+          "en": "Event {role} {object}.{event}",
+          "args": [
+            {
+              "name": "role",
+              "values": {
+                "pub": "publisher",
+                "sub": "subscriber"
+              }
+            },
+            {
+              "name": "object",
+              "type": "value"
+            },
+            {
+              "name": "event",
+              "type": "value"
+            }
+          ],
+          "keys": {
+            "st": {
+              "set": "change",
+              "en": "status"
+            }
+          },
+          "example": "evt sub \"Sales-Post\" OnAfterPostSalesDoc st:new"
+        },
+        "perm": {
+          "meaning": "permission in a permission set",
+          "en": "Permission set {set}: {type} {object} = {rights}",
+          "args": [
+            {
+              "name": "set",
+              "type": "value"
+            },
+            {
+              "name": "type",
+              "set": "al_perm_object"
+            },
+            {
+              "name": "object",
+              "type": "value"
+            },
+            {
+              "name": "rights",
+              "type": "value",
+              "pattern": "^(-|[RIMDX]+)$",
+              "hint": "RIMDX|-"
+            }
+          ],
+          "example": "perm \"EV DEBT\" tabledata \"Rykker Log\" RIMD"
+        },
+        "upg": {
+          "meaning": "upgrade code with upgrade tag",
+          "en": "Upgrade in {codeunit}, tag {tag}[ — {what}]",
+          "args": [
+            {
+              "name": "codeunit",
+              "type": "value"
+            },
+            {
+              "name": "tag",
+              "type": "value"
+            },
+            {
+              "name": "what",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "example": "upg \"EV Upgrade\" \"EV-1740-RykkerStatus\" \"fill new status field\""
+        },
+        "lay": {
+          "meaning": "report layout",
+          "en": "Layout {name} ({kind}) for report {report}",
+          "args": [
+            {
+              "name": "report",
+              "type": "value"
+            },
+            {
+              "name": "name",
+              "type": "value"
+            },
+            {
+              "name": "kind",
+              "values": {
+                "rdlc": "RDLC",
+                "word": "Word",
+                "excel": "Excel",
+                "custom": "custom"
+              }
+            }
+          ],
+          "keys": {
+            "st": {
+              "set": "change",
+              "en": "status"
+            },
+            "def": {
+              "en": "default layout",
+              "values": {
+                "y": "yes",
+                "n": "no"
+              }
+            }
+          },
+          "example": "lay \"EV Rykker\" \"EV Rykker DK\" word st:new def:y"
+        },
+        "api": {
+          "meaning": "API page or query",
+          "en": "API {object} at {route}/{entity}",
+          "args": [
+            {
+              "name": "object",
+              "type": "value"
+            },
+            {
+              "name": "route",
+              "type": "value",
+              "pattern": "^[^/\\s]+/[^/\\s]+/[^/\\s]+$",
+              "hint": "publisher/group/version"
+            },
+            {
+              "name": "entity",
+              "type": "value"
+            }
+          ],
+          "keys": {
+            "st": {
+              "set": "change",
+              "en": "status"
+            },
+            "ops": {
+              "type": "text",
+              "en": "operations"
+            }
+          },
+          "example": "api \"EV Rykker API\" ev/debt/v1.0 rykkers st:new ops:\"GET|PATCH\""
+        }
+      },
+      "extends": {
+        "ctx": {
+          "keys": {
+            "app": {
+              "type": "value",
+              "en": "extension"
+            },
+            "co": {
+              "type": "value",
+              "en": "company"
+            },
+            "tenant": {
+              "type": "value",
+              "en": "tenant"
+            }
+          }
+        },
+        "f": {
+          "keys": {
+            "rule": {
+              "type": "value",
+              "en": "rule"
+            }
+          }
+        },
+        "err": {
+          "keys": {
+            "rule": {
+              "type": "value",
+              "en": "rule"
+            }
+          }
+        }
+      },
+      "sets": [
+        "al_object",
+        "al_perm_object"
+      ]
+    },
+    "bcops": {
+      "description": "Business Central operations (telemetry).",
+      "records": {
+        "tel": {
+          "meaning": "telemetry observation",
+          "en": "Telemetry {event}: {count} times[ — {observation}]",
+          "args": [
+            {
+              "name": "event",
+              "type": "id"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "observation",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "keys": {
+            "per": {
+              "type": "value",
+              "en": "period"
+            },
+            "obj": {
+              "type": "value",
+              "en": "object"
+            }
+          },
+          "example": "tel RT0005 37 \"long SQL on rykker posting\" per:7d obj:\"HortenAdvisMgt IFPS\""
+        }
+      },
+      "extends": {},
+      "sets": []
+    },
+    "dev": {
+      "description": "General software development (builds, tests, changes, estimates, dependencies, HTTP calls).",
+      "records": {
+        "bld": {
+          "meaning": "build result",
+          "en": "Build {status}",
+          "args": [
+            {
+              "name": "status",
+              "values": {
+                "ok": "succeeded",
+                "fail": "failed"
+              }
+            }
+          ],
+          "keys": {
+            "warn": {
+              "type": "int",
+              "en": "warnings"
+            },
+            "err": {
+              "type": "int",
+              "en": "errors"
+            },
+            "tool": {
+              "type": "value",
+              "en": "tool"
+            }
+          },
+          "example": "bld fail err:2 warn:14 tool:alc"
+        },
+        "tst": {
+          "meaning": "test run summary",
+          "en": "Tests: {result} passed",
+          "args": [
+            {
+              "name": "result",
+              "type": "ratio"
+            }
+          ],
+          "keys": {
+            "fail": {
+              "type": "int",
+              "en": "failed"
+            },
+            "skip": {
+              "type": "int",
+              "en": "skipped"
+            },
+            "suite": {
+              "type": "value",
+              "en": "suite"
+            }
+          },
+          "example": "tst 41/42 fail:1 suite:DebtColl"
+        },
+        "tc": {
+          "meaning": "single test case",
+          "en": "Test {name}: {status}[ — {note}]",
+          "args": [
+            {
+              "name": "name",
+              "type": "value"
+            },
+            {
+              "name": "status",
+              "values": {
+                "ok": "passed",
+                "fail": "failed",
+                "skip": "skipped"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "example": "tc TestHortenFallback fail \"expected 1 entry, got 2\""
+        },
+        "chg": {
+          "meaning": "change to a file",
+          "en": "Change {kind} {path}[ — {what}]",
+          "args": [
+            {
+              "name": "path",
+              "type": "value"
+            },
+            {
+              "name": "kind",
+              "values": {
+                "add": "added",
+                "mod": "modified",
+                "del": "deleted",
+                "ren": "renamed"
+              }
+            },
+            {
+              "name": "what",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "example": "chg \"$src/X.al\" mod \"added Customer No. filter\""
+        },
+        "est": {
+          "meaning": "estimate",
+          "en": "Estimate {amount}[ — {basis}]",
+          "args": [
+            {
+              "name": "amount",
+              "type": "amount",
+              "units": {
+                "h": "hours",
+                "d": "days",
+                "sp": "story points"
+              }
+            },
+            {
+              "name": "basis",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "keys": {
+            "conf": {
+              "type": "pct",
+              "en": "confidence (%)"
+            }
+          },
+          "example": "est 6h \"2 codeunits + tests\" conf:60"
+        },
+        "dep": {
+          "meaning": "dependency change",
+          "en": "Dependency {name} {ver}: {action}",
+          "args": [
+            {
+              "name": "name",
+              "type": "value"
+            },
+            {
+              "name": "ver",
+              "type": "value"
+            },
+            {
+              "name": "action",
+              "values": {
+                "add": "added",
+                "upd": "updated",
+                "rm": "removed"
+              }
+            }
+          ],
+          "example": "dep \"Base Application\" 25.0 upd"
+        },
+        "http": {
+          "meaning": "HTTP call made",
+          "en": "HTTP {method} {url} → {status}[ — {note}]",
+          "args": [
+            {
+              "name": "method",
+              "values": {
+                "GET": "GET",
+                "POST": "POST",
+                "PUT": "PUT",
+                "PATCH": "PATCH",
+                "DELETE": "DELETE",
+                "HEAD": "HEAD",
+                "OPTIONS": "OPTIONS"
+              }
+            },
+            {
+              "name": "url",
+              "type": "value"
+            },
+            {
+              "name": "status",
+              "type": "int"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "optional": true
+            }
+          ],
+          "keys": {
+            "ms": {
+              "type": "int",
+              "en": "duration ms"
+            }
+          },
+          "example": "http PATCH \"$base/rykkers(123)\" 400 \"missing If-Match\" ms:212"
+        }
+      },
+      "extends": {
+        "ctx": {
+          "keys": {
+            "repo": {
+              "type": "value",
+              "en": "repository"
+            },
+            "pr": {
+              "type": "value",
+              "en": "pull request"
+            },
+            "run": {
+              "type": "value",
+              "en": "build/pipeline run"
+            }
+          }
+        }
+      },
+      "sets": []
+    }
+  }
+}

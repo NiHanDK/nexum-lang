@@ -1,0 +1,4 @@
+@nx1.0 core qa>or ask #11
+ctx task:EVIT-1740 env:sandbox
+q q1 "which company should the tests run in?" opt:"CRONUS|EV Test"
+hyp h1 70 "duplicate posts come from the job queue" st:open ev:"two entries 3 s apart"

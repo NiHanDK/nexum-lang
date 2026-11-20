@@ -1,0 +1,17 @@
+# NEXUM bcops pack: Business Central operations. Split from bc so only diagnostics/support agents load it.
+
+pack: bcops
+description: Business Central operations (telemetry).
+
+records:
+  tel:
+    meaning: telemetry observation
+    en: "Telemetry {event}: {count} times[ — {observation}]"
+    args:
+      - {name: event, type: id}
+      - {name: count, type: int}
+      - {name: observation, type: text, optional: true}
+    keys:
+      per: {type: value, en: period}
+      obj: {type: value, en: object}
+    example: 'tel RT0005 37 "long SQL on rykker posting" per:7d obj:"HortenAdvisMgt IFPS"'

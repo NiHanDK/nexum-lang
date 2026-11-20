@@ -1,0 +1,14 @@
+@nx1.0 core,dev,bc sa>or upd #4
+ctx task:EVIT-1740
+step 1 done "design approved"
+step 2 doing "add Customer No. filter" by:dev
+step 3 todo "add regression test" by:qa
+obj codeunit 50120 "HortenAdvisMgt IFPS" st:mod
+fld "Cust. Ledger Entry" 50100 "Rykker Status" st:new type:Enum
+evt sub "Sales-Post" OnAfterPostSalesDoc st:new
+upg "EV Upgrade" "EV-1740-RykkerStatus" "fill new status field"
+lay "EV Rykker" "EV Rykker DK" word st:new def:y
+est 6h "2 codeunits + tests" conf:60
+dep "Base Application" 25.0 upd
+out knowledge/designs/EVIT-1740.md "design" kind:doc
+ext rec dupe "need a record for duplicate-posting checks" ex:"dupe \"Cust. Ledger Entry\" 2" pack:bc

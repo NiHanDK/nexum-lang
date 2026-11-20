@@ -1,0 +1,7 @@
+@nx1.0 core,dev dev>or done ^3
+def $dc "ev-evita/app/Debt Collection"
+ctx task:EVIT-1740 branch:EVIT-1740-rykker-dubletter
+chg "$dc/HortenAdvisMgt_IFPS.Codeunit.al" mod "added Customer No. filter"
+bld ok warn:3 tool:alc
+tst 42/42 suite:DebtColl
+v ok

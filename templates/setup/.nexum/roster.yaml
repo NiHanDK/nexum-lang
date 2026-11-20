@@ -1,0 +1,6 @@
+# Agent codes for this setup: code -> agent name.
+# Codes are lowercase letters/digits. Reserved by NEXUM: usr (user), sys (automation).
+agents:
+  or: orchestrator
+  dev: developer
+  cr: code-reviewer

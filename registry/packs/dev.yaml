@@ -1,0 +1,91 @@
+# NEXUM dev pack: general software development, any language.
+# Same schema as core.yaml. "extends" adds keys or values to records of other packs (never changes meaning).
+
+pack: dev
+description: General software development (builds, tests, changes, estimates, dependencies, HTTP calls).
+
+records:
+  bld:
+    meaning: build result
+    en: "Build {status}"
+    args:
+      - name: status
+        values: {ok: succeeded, fail: failed}
+    keys:
+      warn: {type: int, en: warnings}
+      err: {type: int, en: errors}
+      tool: {type: value, en: tool}
+    example: 'bld fail err:2 warn:14 tool:alc'
+
+  tst:
+    meaning: test run summary
+    en: "Tests: {result} passed"
+    args:
+      - {name: result, type: ratio}
+    keys:
+      fail: {type: int, en: failed}
+      skip: {type: int, en: skipped}
+      suite: {type: value, en: suite}
+    example: 'tst 41/42 fail:1 suite:DebtColl'
+
+  tc:
+    meaning: single test case
+    en: "Test {name}: {status}[ — {note}]"
+    args:
+      - {name: name, type: value}
+      - name: status
+        values: {ok: passed, fail: failed, skip: skipped}
+      - {name: note, type: text, optional: true}
+    example: 'tc TestHortenFallback fail "expected 1 entry, got 2"'
+
+  chg:
+    meaning: change to a file
+    en: "Change {kind} {path}[ — {what}]"
+    args:
+      - {name: path, type: value}
+      - name: kind
+        values: {add: added, mod: modified, del: deleted, ren: renamed}
+      - {name: what, type: text, optional: true}
+    example: 'chg "$src/X.al" mod "added Customer No. filter"'
+
+  est:
+    meaning: estimate
+    en: "Estimate {amount}[ — {basis}]"
+    args:
+      - name: amount
+        type: amount
+        units: {h: hours, d: days, sp: story points}
+      - {name: basis, type: text, optional: true}
+    keys:
+      conf: {type: pct, en: confidence (%)}
+    example: 'est 6h "2 codeunits + tests" conf:60'
+
+  dep:
+    meaning: dependency change
+    en: "Dependency {name} {ver}: {action}"
+    args:
+      - {name: name, type: value}
+      - {name: ver, type: value}
+      - name: action
+        values: {add: added, upd: updated, rm: removed}
+    example: 'dep "Base Application" 25.0 upd'
+
+  http:
+    meaning: HTTP call made
+    en: "HTTP {method} {url} → {status}[ — {note}]"
+    args:
+      - name: method
+        values: {GET: GET, POST: POST, PUT: PUT, PATCH: PATCH, DELETE: DELETE, HEAD: HEAD, OPTIONS: OPTIONS}
+      - {name: url, type: value}
+      - {name: status, type: int}
+      - {name: note, type: text, optional: true}
+    keys:
+      ms: {type: int, en: duration ms}
+    example: 'http PATCH "$base/rykkers(123)" 400 "missing If-Match" ms:212'
+
+extends:
+  ctx:
+    keys:
+      repo: {type: value, en: repository}
+      pr: {type: value, en: pull request}
+      run: {type: value, en: build/pipeline run}

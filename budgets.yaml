@@ -1,0 +1,19 @@
+# NEXUM size budgets. LOCKED: only Nicolai may change this file (see CODEOWNERS).
+# CI fails any change that exceeds a budget. There is no override switch:
+# the only way past a budget is a separate PR that changes this file.
+#
+# Tokens are counted on the generated agent cards (dist/cards/*.md).
+# With ANTHROPIC_API_KEY set, CI counts with the Anthropic token-counting API;
+# without it, a conservative estimate (characters / 3) is used.
+
+core:
+  max_tokens: 800
+  max_records: 20
+
+pack:
+  max_tokens: 400
+
+# Core plus every pack a typical BC message loads.
+typical:
+  packs: [core, dev, bc]
+  max_tokens: 1500

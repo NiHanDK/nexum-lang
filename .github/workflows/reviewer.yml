@@ -1,0 +1,64 @@
+name: Reviewer
+
+# Reviews every PR that changes the language. The reviewer agent comments with a recommendation;
+# Nicolai's approval (CODEOWNERS + branch protection) is what allows a merge.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'registry/**'
+      - 'budgets.yaml'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: reviewer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the Anthropic API key is configured
+        id: key
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not set; the reviewer is skipped."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        if: steps.key.outputs.ok == 'true'
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the NEXUM reviewer for pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Base branch: ${{ github.base_ref }}.
+            Read .github/prompts/reviewer.md and follow it exactly.
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(npm run:*),Bash(npm test:*),Bash(node:*)"
