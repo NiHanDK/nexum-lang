@@ -196,7 +196,8 @@ export function translatorHtml(registry, runtimeSrc) {
 <title>NEXUM ${registry.version} translator</title>
 <style>
   :root { --bg:#f7f6f3; --panel:#fff; --ink:#1d1d1b; --muted:#6b6a66; --line:#e2e0da; --accent:#2f5d50; --warn:#9a6700; --err:#b42318; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --panel:#1f1f1d; --ink:#ecebe7; --muted:#a3a19b; --line:#34332f; --accent:#7fb8a6; --warn:#e3b341; --err:#f97066; } }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#161615; --panel:#1f1f1d; --ink:#ecebe7; --muted:#a3a19b; --line:#34332f; --accent:#7fb8a6; --warn:#e3b341; --err:#f97066; } }
+  :root[data-theme=dark] { --bg:#161615; --panel:#1f1f1d; --ink:#ecebe7; --muted:#a3a19b; --line:#34332f; --accent:#7fb8a6; --warn:#e3b341; --err:#f97066; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   header { padding:20px 24px 8px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
